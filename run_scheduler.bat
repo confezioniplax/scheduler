@@ -1,30 +1,32 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 
 REM ==== PLAX - Scheduler Manutenzioni (Windows 11) ====
-REM Percorso progetto
-set PROJ=C:\Users\leone\OneDrive\Desktop\Plax\apps\scheduler
 
-REM Vai nella cartella progetto ( /d cambia anche drive se serve )
+REM Percorsi assoluti
+set "PROJ=C:\Users\Plax\Desktop\Apps\scheduler"
+set "PY=%PROJ%\.venv\Scripts\python.exe"
+set "LOG=%PROJ%\plax_scheduler.log"
+
+REM Lavora nella cartella del progetto
 cd /d "%PROJ%"
 
-REM Attiva il virtualenv
-call .venv\Scripts\activate.bat
+REM (opzionale) imposta UTF-8 per log pulito
+chcp 65001 >nul
 
-REM Info utili
-echo [%DATE% %TIME%] Working dir: %CD%
-python --version
+REM Header di log
+echo [%%DATE%% %%TIME%%] ==== START ==== >> "%LOG%"
+echo [INFO] CWD=%CD% >> "%LOG%"
+"%PY%" --version >> "%LOG%" 2>&1
 
-REM === ESECUZIONE ===
-REM Per il primo test usa DRY-RUN (non invia email)
-REM python -m app.main send --within 7 --throttle 7 --dry-run
+REM ---- ESECUZIONE JOB ----
+REM Per test senza invio, usa la riga DRY-RUN qui sotto
+REM "%PY%" -m app.main send --within 7 --throttle 7 --dry-run >> "%LOG%" 2>&1
 
-REM Invio reale:
-python -m app.main send --within 7 --throttle 7 >> "%PROJ%\plax_scheduler.log" 2>&1
+"%PY%" -m app.main send --within 7 --throttle 7 >> "%LOG%" 2>&1
+set "ERR=%ERRORLEVEL%"
 
-REM Mantieni la finestra visibile
-echo.
-echo Finito. Premi un tasto per chiudere...
-pause >nul
+REM Footer di log
+echo [%%DATE%% %%TIME%%] ==== END err=%ERR% ==== >> "%LOG%"
 
-endlocal
+endlocal & exit /b %ERR%
