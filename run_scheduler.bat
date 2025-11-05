@@ -15,18 +15,15 @@ REM (opzionale) imposta UTF-8 per log pulito
 chcp 65001 >nul
 
 REM Header di log
-echo [%%DATE%% %%TIME%%] ==== START ==== >> "%LOG%"
+echo [%DATE% %TIME%] ==== START ==== >> "%LOG%"
 echo [INFO] CWD=%CD% >> "%LOG%"
 "%PY%" --version >> "%LOG%" 2>&1
 
 REM ---- ESECUZIONE JOB ----
-REM Per test senza invio, usa la riga DRY-RUN qui sotto
-REM "%PY%" -m app.main send --within 7 --throttle 7 --dry-run >> "%LOG%" 2>&1
-
 "%PY%" -m app.main send --within 7 --throttle 7 >> "%LOG%" 2>&1
 set "ERR=%ERRORLEVEL%"
 
 REM Footer di log
-echo [%%DATE%% %%TIME%%] ==== END err=%ERR% ==== >> "%LOG%"
+echo [%DATE% %TIME%] ==== END err=%ERR% ==== >> "%LOG%"
 
 endlocal & exit /b %ERR%
