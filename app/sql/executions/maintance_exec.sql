@@ -427,3 +427,42 @@ WHERE @tid10 IS NOT NULL AND NOT EXISTS (
 -- FROM vw_maintenance_next_due v
 -- JOIN maintenance_tasks t ON t.id=v.task_id
 -- ORDER BY v.next_due_at, t.title;
+
+
+-- Inserisci l’attività (se non c’è già)
+INSERT INTO maintenance_tasks (title, notes_oper, estimated_minutes, department_id, area_label, active)
+SELECT
+  'Smontaggio pulizia e lubrificazione dei moduli frizione taglierine',
+  'Attività semestrale: moduli frizione taglierine — Ferragosto e dopo la Befana',
+  NULL,
+  NULL,
+  'TAGLIO',
+  1
+WHERE NOT EXISTS (
+  SELECT 1 FROM maintenance_tasks WHERE title='Smontaggio pulizia e lubrificazione dei moduli frizione taglierine'
+);
+
+SET @tid_fric := (SELECT id FROM maintenance_tasks WHERE title='Smontaggio pulizia e lubrificazione dei moduli frizione taglierine' LIMIT 1);
+
+-- Inserisci la regola: ogni 6 mesi (due volte l’anno)
+INSERT INTO maintenance_rules (task_id, kind, interval_months, active)
+SELECT @tid_fric, 'MONTHLY', 6, 1
+WHERE NOT EXISTS (
+  SELECT 1 FROM maintenance_rules WHERE task_id=@tid_fric AND kind='MONTHLY' AND interval_months=6 AND active=1
+);
+
+
+-- Ancoraggio iniziale al 1° gennaio 2026
+INSERT INTO maintenance_events (task_id, done_at, done_by_operator_id, notes)
+SELECT @tid_fric, '2026-01-01 08:00:00', NULL, 'AUTO_SEED: ancoraggio semestrale (base 01/01/2026)'
+WHERE @tid_fric IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM maintenance_events
+    WHERE task_id=@tid_fric AND DATE(done_at)='2026-01-01'
+  );
+
+-- (Facoltativo) verifica prossima scadenza
+-- SELECT t.title, v.next_due_at
+-- FROM vw_maintenance_next_due v
+-- JOIN maintenance_tasks t ON t.id=v.task_id
+-- WHERE t.id=@tid_fric;
