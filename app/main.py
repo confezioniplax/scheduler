@@ -23,6 +23,8 @@ from .jobs.manutenzioni import (
     insert_event,
     run_send,
 )
+from app.jobs import manutenzioni
+from app.jobs import dwh_refresh   # <-- nuovo import
 
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Rome"))
 
@@ -76,6 +78,12 @@ def cmd_events(args: argparse.Namespace) -> None:
         who = f"op:{opid}" if opid else "-"
         print(f"- {done} | {who} | {r.get('first_name','') } {r.get('last_name','') } | {r.get('notes','')}")
 
+def cmd_dwh_refresh(args: argparse.Namespace) -> None:
+    res = dwh_refresh.run(dry_run=args.dry_run)
+    print(res)
+
+
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -113,6 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
     pe.add_argument("task_id", type=int, help="ID del task.")
     pe.set_defaults(func=cmd_events)
 
+    # --- DWH REFRESH ---
+    pdwh = sub.add_parser("dwh-refresh", help="Ricostruisce completamente il DWH da dwh_executions.sql")
+    pdwh.add_argument("--dry-run", action="store_true",
+                      help="Non esegue le query, le logga soltanto.")
+    pdwh.set_defaults(func=cmd_dwh_refresh)
+    
     return p
 
 
