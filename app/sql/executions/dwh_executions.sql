@@ -795,3 +795,179 @@ SELECT
   c.`descrizion`,
   c.`livello`
 FROM fox_staging.magcls c;
+
+
+USE dwh;
+
+-- ============================================
+-- VIEW: vendite per anno / mese / gruppo / classe
+-- ============================================
+DROP VIEW IF EXISTS vw_sales_by_month_group_class;
+
+CREATE VIEW vw_sales_by_month_group_class AS
+SELECT
+  d.year_num                      AS year_num,
+  d.month_num                     AS month_num,
+  d.year_month                    AS year_month,
+
+  g.codice                        AS art_group_code,
+  g.descrizion                    AS art_group_descr,
+  c.codice                        AS art_class_code,
+  c.descrizion                    AS art_class_descr,
+
+  COUNT(*)                        AS rows_count,
+  SUM(f.quantita)                 AS qty_total,
+  SUM(
+    CASE 
+      WHEN f.eurocambio IS NULL OR f.eurocambio = 0 
+        THEN f.prezzotot
+      ELSE f.prezzotot * f.eurocambio
+    END
+  )                               AS amount_eur
+FROM fact_docrig f
+JOIN dim_date d
+  ON d.date_key = f.doc_date_key
+LEFT JOIN dim_article a
+  ON a.article_key = f.article_key
+LEFT JOIN dim_art_group g
+  ON g.codice = a.gruppo
+LEFT JOIN dim_art_class c
+  ON c.codice = a.classe
+GROUP BY
+  d.year_num,
+  d.month_num,
+  d.year_month,
+  g.codice,
+  g.descrizion,
+  c.codice,
+  c.descrizion;
+
+
+USE dwh;
+
+-- ============================================
+-- VIEW: vendite per anno / mese / cliente
+-- ============================================
+DROP VIEW IF EXISTS vw_sales_by_month_customer;
+
+CREATE VIEW vw_sales_by_month_customer AS
+SELECT
+  d.year_num                      AS year_num,
+  d.month_num                     AS month_num,
+  d.year_month                    AS year_month,
+
+  c.codice                        AS customer_code,
+  c.descrizion                    AS customer_name,
+  c.partita_iva                   AS partita_iva,
+  c.codice_fiscale                AS codice_fiscale,
+  c.localita                      AS localita,
+  c.provincia                     AS provincia,
+
+  COUNT(*)                        AS rows_count,
+  SUM(f.quantita)                 AS qty_total,
+  SUM(
+    CASE 
+      WHEN f.eurocambio IS NULL OR f.eurocambio = 0 
+        THEN f.prezzotot
+      ELSE f.prezzotot * f.eurocambio
+    END
+  )                               AS amount_eur
+FROM fact_docrig f
+JOIN dim_date d
+  ON d.date_key = f.doc_date_key
+LEFT JOIN dim_customer c
+  ON c.customer_key = f.customer_key
+GROUP BY
+  d.year_num,
+  d.month_num,
+  d.year_month,
+  c.codice,
+  c.descrizion,
+  c.partita_iva,
+  c.codice_fiscale,
+  c.localita,
+  c.provincia;
+
+
+USE dwh;
+
+-- ============================================
+-- VIEW: dettaglio righe documenti “flattened”
+-- ============================================
+DROP VIEW IF EXISTS vw_fact_docrig_detail;
+
+CREATE VIEW vw_fact_docrig_detail AS
+SELECT
+  -- chiave naturale documento
+  f.tipodoc,
+  f.esanno,
+  f.numerodoc,
+  f.numeroriga,
+
+  -- date
+  d_doc.full_date      AS doc_date,
+  d_doc.year_num       AS doc_year,
+  d_doc.month_num      AS doc_month,
+  d_doc.year_month     AS doc_year_month,
+
+  d_deliv.full_date    AS deliv_date,
+  d_deliv.year_month   AS deliv_year_month,
+
+  -- cliente
+  c.codice             AS customer_code,
+  c.descrizion         AS customer_name,
+  c.partita_iva        AS customer_piva,
+  c.localita           AS customer_city,
+  c.provincia          AS customer_prov,
+
+  -- articolo
+  a.codicearti         AS article_code,
+  a.descrizion         AS article_descr,
+  a.unmisura           AS article_um,
+  a.gruppo             AS article_group_code,
+  a.classe             AS article_class_code,
+  g.descrizion         AS article_group_descr,
+  cl.descrizion        AS article_class_descr,
+
+  -- magazzino
+  w.codice             AS warehouse_code,
+  w.descrizion         AS warehouse_descr,
+
+  -- tipodoc
+  td.tipodoc           AS tipodoc_code,
+  td.tipo_fiscale      AS tipodoc_tipo_fiscale,
+  td.direction         AS tipodoc_direction,
+
+  -- misure
+  f.quantita,
+  f.quantitare,
+  f.prezzoun,
+  f.prezzotot,
+  f.scontiv,
+  f.aliiva,
+  f.valuta,
+  f.cambio,
+  f.eurocambio,
+  CASE 
+    WHEN f.eurocambio IS NULL OR f.eurocambio = 0 
+      THEN f.prezzotot
+    ELSE f.prezzotot * f.eurocambio
+  END                 AS amount_eur
+
+FROM fact_docrig f
+LEFT JOIN dim_date d_doc
+  ON d_doc.date_key = f.doc_date_key
+LEFT JOIN dim_date d_deliv
+  ON d_deliv.date_key = f.deliv_date_key
+LEFT JOIN dim_customer c
+  ON c.customer_key = f.customer_key
+LEFT JOIN dim_article a
+  ON a.article_key = f.article_key
+LEFT JOIN dim_art_group g
+  ON g.codice = a.gruppo
+LEFT JOIN dim_art_class cl
+  ON cl.codice = a.classe
+LEFT JOIN dim_warehouse w
+  ON w.warehouse_key = f.warehouse_key
+LEFT JOIN dim_tipodoc td
+  ON td.tipodoc_key = f.tipodoc_key;
