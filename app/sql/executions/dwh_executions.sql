@@ -796,7 +796,6 @@ SELECT
   c.`livello`
 FROM fox_staging.magcls c;
 
-
 USE dwh;
 
 -- ============================================
@@ -808,7 +807,7 @@ CREATE VIEW vw_sales_by_month_group_class AS
 SELECT
   d.year_num                      AS year_num,
   d.month_num                     AS month_num,
-  d.year_month                    AS year_month,
+  d.year_month                    AS doc_year_month,
 
   g.codice                        AS art_group_code,
   g.descrizion                    AS art_group_descr,
@@ -854,7 +853,7 @@ CREATE VIEW vw_sales_by_month_customer AS
 SELECT
   d.year_num                      AS year_num,
   d.month_num                     AS month_num,
-  d.year_month                    AS year_month,
+  d.year_month                    AS doc_year_month,
 
   c.codice                        AS customer_code,
   c.descrizion                    AS customer_name,
