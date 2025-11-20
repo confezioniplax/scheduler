@@ -486,3 +486,251 @@ LEFT JOIN dwh.dim_warehouse w
   ON w.codice = r.magpartenz
 LEFT JOIN dwh.dim_tipodoc td
   ON td.tipodoc = r.tipodoc;
+
+USE dwh;
+
+-- ============================================
+-- DIM CAUSALE MAGAZZINO
+-- ============================================
+DROP TABLE IF EXISTS dim_causale_mag;
+
+CREATE TABLE dim_causale_mag (
+  causale_key   INT         NOT NULL AUTO_INCREMENT,
+  codice        VARCHAR(5)  NOT NULL,      -- caumag.codice
+  descrizion    VARCHAR(80) NULL,          -- caumag.descrizion
+
+  magpflag      TINYINT(1)  NULL,          -- parte prodotti
+  magaflag      TINYINT(1)  NULL,          -- parte acquisti
+  clifor        SMALLINT    NULL,          -- 1=cliente, 2=fornitore
+
+  ppordin       CHAR(1)     NULL,
+  ppimpegn      CHAR(1)     NULL,
+  pcordin       CHAR(1)     NULL,
+  pcimpegn      CHAR(1)     NULL,
+  apordin       CHAR(1)     NULL,
+  apimpegn      CHAR(1)     NULL,
+  acordin       CHAR(1)     NULL,
+  acimpegn      CHAR(1)     NULL,
+
+  timestamp_src DATETIME    NULL,
+  username_src  VARCHAR(40) NULL,
+
+  PRIMARY KEY (causale_key),
+  UNIQUE KEY uk_causale_codice (codice)
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_520_ci;
+
+INSERT INTO dim_causale_mag (
+  codice,
+  descrizion,
+  magpflag,
+  magaflag,
+  clifor,
+  ppordin,
+  ppimpegn,
+  pcordin,
+  pcimpegn,
+  apordin,
+  apimpegn,
+  acordin,
+  acimpegn,
+  timestamp_src,
+  username_src
+)
+SELECT
+  c.codice,
+  c.descrizion,
+  c.magpflag,
+  c.magaflag,
+  c.clifor,
+  c.ppordin,
+  c.ppimpegn,
+  c.pcordin,
+  c.pcimpegn,
+  c.apordin,
+  c.apimpegn,
+  c.acordin,
+  c.acimpegn,
+  c.timestamp_row,
+  c.username
+FROM fox_staging.caumag c;
+
+USE dwh;
+
+-- ============================================
+-- DIM LOTTO
+-- ============================================
+DROP TABLE IF EXISTS dim_lotto;
+
+CREATE TABLE dim_lotto (
+  lotto_key     INT          NOT NULL AUTO_INCREMENT,
+  codicearti    VARCHAR(20)  NOT NULL,     -- lotti.codicearti
+  codice        VARCHAR(20)  NOT NULL,     -- lotti.codice (lotto)
+  descrizion    VARCHAR(40)  NULL,
+  datascad      DATE         NULL,
+  timestamp_src DATETIME     NULL,
+  username_src  VARCHAR(20)  NULL,
+
+  PRIMARY KEY (lotto_key),
+  UNIQUE KEY uk_art_lotto (codicearti, codice),
+  KEY idx_lotto (codice),
+  KEY idx_datascad (datascad)
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_520_ci;
+
+INSERT INTO dim_lotto (
+  codicearti,
+  codice,
+  descrizion,
+  datascad,
+  timestamp_src,
+  username_src
+)
+SELECT
+  l.codicearti,
+  l.codice,
+  l.descrizion,
+  l.datascad,
+  l.timestamp_row,
+  l.username
+FROM fox_staging.lotti l;
+
+USE dwh;
+
+-- =====================================================
+-- FACT MAGMOV - Movimenti di magazzino
+-- =====================================================
+DROP TABLE IF EXISTS fact_magmov;
+
+CREATE TABLE fact_magmov (
+  fact_id        BIGINT       NOT NULL AUTO_INCREMENT,
+
+  -- chiave sorgente (ID FoxPro)
+  mov_id         BIGINT       NULL,
+
+  -- calendari
+  mov_date_key   INT          NULL,
+
+  -- dimensioni surrogate
+  customer_key   INT          NULL,
+  article_key    INT          NULL,
+  warehouse_key  INT          NULL,
+  causale_key    INT          NULL,
+
+  -- copie codici business
+  codicecf       VARCHAR(6)   NULL,
+  codicearti     VARCHAR(20)  NULL,
+  magazzino      VARCHAR(5)   NULL,
+  codcausale     VARCHAR(5)   NULL,
+  lotto          VARCHAR(20)  NULL,
+
+  -- misure principali
+  quantita       DECIMAL(18,6) NULL,
+  quantitare     DECIMAL(18,6) NULL,
+  qtaindist      DECIMAL(18,6) NULL,
+  valore         DECIMAL(18,6) NULL,
+  ultcosto       DECIMAL(18,6) NULL,
+
+  -- flag di politica stock (come da MAGMOV)
+  ordin          SMALLINT     NULL,
+  impegn         SMALLINT     NULL,
+  qtacar         SMALLINT     NULL,
+  qtascar        SMALLINT     NULL,
+  qtatcar        SMALLINT     NULL,
+  qtatscar       SMALLINT     NULL,
+  qtaret         SMALLINT     NULL,
+
+  PRIMARY KEY (fact_id),
+
+  KEY idx_mov_date    (mov_date_key),
+  KEY idx_customer    (customer_key),
+  KEY idx_article     (article_key),
+  KEY idx_warehouse   (warehouse_key),
+  KEY idx_causale     (causale_key),
+
+  CONSTRAINT fk_fact_magmov_dim_date
+    FOREIGN KEY (mov_date_key)   REFERENCES dim_date(date_key),
+
+  CONSTRAINT fk_fact_magmov_dim_customer
+    FOREIGN KEY (customer_key)   REFERENCES dim_customer(customer_key),
+
+  CONSTRAINT fk_fact_magmov_dim_article
+    FOREIGN KEY (article_key)    REFERENCES dim_article(article_key),
+
+  CONSTRAINT fk_fact_magmov_dim_warehouse
+    FOREIGN KEY (warehouse_key)  REFERENCES dim_warehouse(warehouse_key),
+
+  CONSTRAINT fk_fact_magmov_dim_causale
+    FOREIGN KEY (causale_key)    REFERENCES dim_causale_mag(causale_key)
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_520_ci;
+
+
+INSERT INTO fact_magmov (
+  mov_id,
+  mov_date_key,
+  customer_key,
+  article_key,
+  warehouse_key,
+  causale_key,
+  codicecf,
+  codicearti,
+  magazzino,
+  codcausale,
+  lotto,
+  quantita,
+  quantitare,
+  qtaindist,
+  valore,
+  ultcosto,
+  ordin,
+  impegn,
+  qtacar,
+  qtascar,
+  qtatcar,
+  qtatscar,
+  qtaret
+)
+SELECT
+  m.id                                       AS mov_id,
+
+  dd.date_key                                AS mov_date_key,
+
+  c.customer_key                             AS customer_key,
+  a.article_key                              AS article_key,
+  w.warehouse_key                            AS warehouse_key,
+  cm.causale_key                             AS causale_key,
+
+  m.codicecf,
+  m.codicearti,
+  m.magazzino,
+  m.codcausale,
+  m.lotto,
+
+  m.quantita,
+  m.quantitare,
+  m.qtaindist,
+  m.valore,
+  m.ultcosto,
+
+  m.ordin,
+  m.impegn,
+  m.qtacar,
+  m.qtascar,
+  m.qtatcar,
+  m.qtatscar,
+  m.qtaret
+FROM fox_staging.magmov m
+LEFT JOIN dwh.dim_date dd
+  ON dd.full_date = m.datamov
+LEFT JOIN dwh.dim_customer c
+  ON c.codice = m.codicecf
+LEFT JOIN dwh.dim_article a
+  ON a.codicearti = m.codicearti
+LEFT JOIN dwh.dim_warehouse w
+  ON w.codice = m.magazzino
+LEFT JOIN dwh.dim_causale_mag cm
+  ON cm.codice = m.codcausale;
