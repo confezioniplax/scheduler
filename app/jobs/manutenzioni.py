@@ -6,7 +6,6 @@ from typing import Dict, List
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-# import dal tuo path
 from app.core.db import DbManager, MySQLDb, QueryType
 from app.core.mailer import send_email, SchedulerEmailException
 from app.sql.query.maintenance_queries import QuerySqlManutenzioniMYSQL as Q
@@ -40,7 +39,11 @@ def _render_table(rows: List[dict], within_days: int) -> str:
             f"<td style='padding:6px;border:1px solid #ddd'>{_h(area)}</td>"
             "</tr>"
         )
-    body_rows = "".join(trs) if trs else "<tr><td colspan='4' style='padding:8px;border:1px solid #ddd'>Nessuna scadenza.</td></tr>"
+    body_rows = (
+        "".join(trs)
+        if trs
+        else "<tr><td colspan='4' style='padding:8px;border:1px solid #ddd'>Nessuna scadenza.</td></tr>"
+    )
     generated = datetime.now(TZ).strftime("%Y-%m-%d %H:%M")
     return f"""
     <div style="font-family:system-ui,Segoe UI,Arial,sans-serif">
@@ -75,7 +78,7 @@ def list_due(within_days: int) -> List[dict]:
 # ---------------------------
 def _recipients_from_db(task_id: int) -> List[str]:
     sql = Q.recipients_for_task_sql()
-    params = (task_id,)  # ← ora la query accetta 1 solo parametro
+    params = (task_id,)
     with DbManager(MySQLDb()) as db:
         rows = db.execute_query(sql, params, fetchall=True, query_type=QueryType.GET) or []
     seen, emails = set(), []
@@ -130,7 +133,7 @@ def log_mail(task_id: int, email: str, subject: str, reason: str = "due_time") -
 
 
 # ---------------------------
-# Storico interventi
+# Storico interventi (lasciato per compatibilità, ma NON usato per auto-reset)
 # ---------------------------
 def insert_event(task_id: int, done_by_operator_id: int | None, notes: str | None) -> int:
     sql = Q.insert_event_sql()
@@ -147,13 +150,28 @@ def list_events(task_id: int) -> List[dict]:
 # ---------------------------
 # Job: invio email scadenze
 # ---------------------------
-def run_send(within_days: int = 7, throttle_days: int = 7, dry_run: bool = False, advance_on_send: bool = True) -> Dict[str, int]:
+def run_send(
+    within_days: int = 7,
+    throttle_days: int = 7,
+    dry_run: bool = False,
+    advance_on_send: bool = True,  # parametro mantenuto per compatibilità, MA IGNORATO
+) -> Dict[str, int]:
+    """
+    Invia le email di scadenza manutenzioni.
+
+    NOTA: non registra più interventi automatici (nessun AUTO_RESET su invio mail).
+    La registrazione degli interventi è ora responsabilità della web app / operatori.
+    """
     due_rows = list_due(within_days)
-    use_db = str(os.getenv("SCHEDULER_USE_DB_RECIPIENTS", "1")).strip().lower() in {"1","true","yes","on"}
+    use_db = str(os.getenv("SCHEDULER_USE_DB_RECIPIENTS", "1")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     sent = 0
     skipped = 0
-    advanced_tasks: set[int] = set()
 
     if not due_rows:
         return {"rows_found": 0, "distinct_recipients": 0, "sent": 0, "skipped": 0}
@@ -177,25 +195,14 @@ def run_send(within_days: int = 7, throttle_days: int = 7, dry_run: bool = False
         try:
             send_email(subject=subject, html=html_all, to=to_list, cc=cc_list, bcc=bcc_list)
 
-            # log throttle (qui potresti includere anche cc/bcc se vuoi)
+            # log throttle (solo log, nessun evento auto-reset)
             for r in due_rows:
                 for email in to_list:
                     try:
                         if not was_recently_mailed(r["task_id"], email, throttle_days):
                             log_mail(r["task_id"], email, subject, reason="due_time")
                     except Exception:
-                        pass
-
-            # AVANZA LE SCADENZE per ogni task notificato
-            if advance_on_send:
-                for r in due_rows:
-                    tid = r["task_id"]
-                    if tid in advanced_tasks:
-                        continue
-                    try:
-                        insert_event(tid, None, f"AUTO_RESET: mailed {datetime.now(TZ).isoformat()}")
-                        advanced_tasks.add(tid)
-                    except Exception:
+                        # il logging non deve bloccare il job
                         pass
 
             sent = 1
@@ -226,16 +233,8 @@ def run_send(within_days: int = 7, throttle_days: int = 7, dry_run: bool = False
                 try:
                     log_mail(r["task_id"], email, subject, reason="due_time")
                 except Exception:
+                    # idem: il log non deve bloccare l'invio
                     pass
-
-                if advance_on_send:
-                    tid = r["task_id"]
-                    if tid not in advanced_tasks:
-                        try:
-                            insert_event(tid, None, f"AUTO_RESET: mailed to {email} at {datetime.now(TZ).isoformat()}")
-                            advanced_tasks.add(tid)
-                        except Exception:
-                            pass
 
             sent += 1
         except SchedulerEmailException:
