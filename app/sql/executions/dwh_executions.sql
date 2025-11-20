@@ -734,3 +734,64 @@ LEFT JOIN dwh.dim_warehouse w
   ON w.codice = m.magazzino
 LEFT JOIN dwh.dim_causale_mag cm
   ON cm.codice = m.codcausale;
+
+USE dwh;
+
+-- ============================================
+-- DIMENSIONE GRUPPO ARTICOLO (MAGGRP)
+-- ============================================
+DROP TABLE IF EXISTS dim_art_group;
+
+CREATE TABLE dim_art_group (
+  art_group_key INT          NOT NULL AUTO_INCREMENT,
+  codice        VARCHAR(5)   NOT NULL,    -- MAGGRP.CODICE
+  descrizion    VARCHAR(30)  NULL,        -- MAGGRP.DESCRIZION
+  livello       INT          NULL,        -- MAGGRP.LIVELLO
+
+  PRIMARY KEY (art_group_key),
+  UNIQUE KEY uk_codice (codice)
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_520_ci;
+
+INSERT INTO dim_art_group (
+  codice,
+  descrizion,
+  livello
+)
+SELECT
+  g.`codice`,
+  g.`descrizion`,
+  g.`livello`
+FROM fox_staging.maggrp g;
+
+USE dwh;
+
+-- ============================================
+-- DIMENSIONE CLASSE ARTICOLO (MAGCLS)
+-- ============================================
+DROP TABLE IF EXISTS dim_art_class;
+
+CREATE TABLE dim_art_class (
+  art_class_key INT          NOT NULL AUTO_INCREMENT,
+  codice        VARCHAR(5)   NOT NULL,    -- MAGCLS.CODICE
+  descrizion    VARCHAR(60)  NULL,        -- MAGCLS.DESCRIZION
+  livello       INT          NULL,        -- MAGCLS.LIVELLO
+
+  PRIMARY KEY (art_class_key),
+  UNIQUE KEY uk_codice (codice),
+  KEY idx_livello (livello)
+) ENGINE=InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_unicode_520_ci;
+
+INSERT INTO dim_art_class (
+  codice,
+  descrizion,
+  livello
+)
+SELECT
+  c.`codice`,
+  c.`descrizion`,
+  c.`livello`
+FROM fox_staging.magcls c;
